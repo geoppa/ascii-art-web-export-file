@@ -690,3 +690,24 @@ input[type="radio"]:checked + label {
   }
 
 }
+/* NEW: CYBERPUNK NEON CYAN/GREEN THEME FOR EXPORT BUTTON */
+.export-btn {
+  background: linear-gradient(90deg, #06b6d4, #10b981) !important;
+  box-shadow:
+    0 0 20px rgba(6, 182, 212, 0.45),
+    0 0 35px rgba(16, 185, 129, 0.25) !important;
+}
+
+/* NEW: ACCENTUATE THE DOWNLOAD ICON COLOR */
+.export-btn .btn-icon {
+  color: #a7f3d0 !important;
+  text-shadow: 0 0 6px rgba(16, 185, 129, 0.8) !important;
+}
+
+/* NEW: CONTROL HOVER TRANSLATION SEPARATELY FOR FLUIDITY */
+.export-btn:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow:
+    0 0 25px rgba(6, 182, 212, 0.8),
+    0 0 40px rgba(16, 185, 129, 0.5) !important;
+}

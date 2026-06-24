@@ -103,17 +103,27 @@
 
             <div class="button-row">
 
-                <button class="generate-btn" type="submit">
-                    <span class="btn-icon">⚡</span>
-                    <span>Generate ASCII Art</span>
-                </button>
+    <button class="generate-btn" type="submit" name="action" value="generate">
+        <span class="btn-icon">⚡</span>
+        <span>Generate ASCII Art</span>
+    </button>
 
-                <a href="/" class="reset-btn">
-                    <span class="btn-icon">🔄</span>
-                    <span>Reset Page</span>
-                </a>
+    <!-- THE CONDITION CHECKS IF ART EXISTS, THEN RENDERS THE NEW STYLED EXPORT -->
+    {{ if .Result }}
+    <button class="generate-btn export-btn" type="submit" name="action" value="export">
+        <span class="btn-icon">💾</span>
+        <span>Export File</span>
+    </button>
+    {{ end }}
 
-            </div>
+    <a href="/" class="reset-btn">
+        <span class="btn-icon">🔄</span>
+        <span>Reset Page</span>
+    </a>
+
+</div>
+
+
 
             {{ if .Error }}
             <div class="error-box">

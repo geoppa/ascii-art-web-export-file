@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"ascii-art-web/internal/server"
+	"ascii-art-web-export-file/internal/server"
 )
 
 func main() {

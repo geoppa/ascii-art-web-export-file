@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"ascii-art-web/internal/server"
+	"ascii-art-web-export-file/internal/server"
 )
 
 func TestMainIntegration(t *testing.T) {

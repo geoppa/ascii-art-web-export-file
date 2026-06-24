@@ -3,10 +3,11 @@ package handlers
 import (
 	"html/template"
 	"net/http"
+	"strconv" // NEW: ADDED FOR THE CONTENT-LENGTH HEADER CONVERSION
 
-	"ascii-art-web/internal/banner"
-	"ascii-art-web/internal/render"
-	"ascii-art-web/internal/validation"
+	"ascii-art-web-export-file/internal/banner"
+	"ascii-art-web-export-file/internal/render"
+	"ascii-art-web-export-file/internal/validation"
 )
 
 // PageData holds form and result information for the main UI
@@ -85,6 +86,58 @@ func AsciiArtHandler(w http.ResponseWriter, r *http.Request) {
 		renderErrorPage(w, http.StatusMethodNotAllowed, "Method Not Allowed")
 		return
 	}
+// AsciiArtHandler validates form inputs, reads files, and processes the output art
+func AsciiArtHandler(w http.ResponseWriter, r *http.Request) {
+	// Block requests trying to execute anything other than a secure POST
+	if r.Method != http.MethodPost {
+		renderErrorPage(w, http.StatusMethodNotAllowed, "Method Not Allowed")
+		return
+	}
+
+	// NEW: LIMIT THE REQUEST BODY SIZE TO 10 MEGABYTES TO PREVENT FLOODING / CRASHES
+	// NEW: IF THE INPUT EXCEEDS THIS, PARSEFORM WILL RETURN AN ERROR
+	const maxRequestSize = 10 * 1024 * 1024 // 10MB
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestSize)
+
+	// Read form inputs safely
+	err := r.ParseForm()
+	if err != nil {
+		// NEW: SPECIFICALLY DETECT IF THE ERROR WAS CAUSED BY EXCEEDING THE MAX SIZE LIMIT
+		if strings.Contains(err.Error(), "request body too large") {
+			renderErrorPage(w, http.StatusRequestEntityTooLarge, "Request Entity Too Large")
+			return
+		}
+		renderErrorPage(w, http.StatusBadRequest, "Bad Request")
+		return
+	}
+
+	text := r.FormValue("text")
+	bannerName := r.FormValue("banner")
+	action := r.FormValue("action") // NEW: CAPTURES WHICH SUBMIT BUTTON WAS PRESSED (GENERATE OR EXPORT)
+
+	// NEW: EXPLICIT CHARACTER COUNT CHECK (E.G., MAX 1000 CHARACTERS FOR INTENSE ASCII COMPUTATION)
+	if len(text) > 1000 {
+		w.WriteHeader(http.StatusBadRequest)
+		renderHomePage(w, PageData{
+			Text:   text,
+			Banner: bannerName,
+			Error:  "Input text is too long! Maximum allowed is 1000 characters.",
+		})
+		return
+	}
+
+	// Verify inputted text conforms to printable character rules
+	err = validation.ValidateText(text)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest) // tells the browser this is a 400 error
+		renderHomePage(w, PageData{
+			Text:   text,
+			Banner: bannerName,
+			Error:  err.Error(),
+		})
+		return
+	}
+
 
 	// Read form inputs safely
 	err := r.ParseForm()
@@ -95,6 +148,7 @@ func AsciiArtHandler(w http.ResponseWriter, r *http.Request) {
 
 	text := r.FormValue("text")
 	bannerName := r.FormValue("banner")
+	action := r.FormValue("action") // NEW: CAPTURES WHICH SUBMIT BUTTON WAS PRESSED (GENERATE OR EXPORT)
 
 	// Verify inputted text conforms to printable character rules
 	err = validation.ValidateText(text)
@@ -135,6 +189,22 @@ func AsciiArtHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Generate standard visual ASCII character block map
 	result := render.Generate(text, bannerData)
+
+	// NEW: CHECK IF THE USER REQUESTED TO DOWNLOAD THE FILE
+	if action == "export" {
+		// NEW: CONVERT STRING TO BYTE SLICE TO MEASURE ACCURATE SIZE IN BYTES
+		dataBytes := []byte(result)
+		contentLength := len(dataBytes)
+
+		// NEW: SET MANDATORY HTTP HEADERS TO FORCE FILE DOWNLOAD IN BROWSER
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Content-Disposition", "attachment; filename=\"ascii-art.txt\"")
+		w.Header().Set("Content-Length", strconv.Itoa(contentLength))
+
+		// NEW: WRITE RAW BYTES DIRECTLY TO RESPONSE STREAM AND TERMINATE HANDLER
+		w.Write(dataBytes)
+		return
+	}
 
 	// Send execution success back to UI output target elements
 	renderHomePage(w, PageData{

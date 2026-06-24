@@ -15,7 +15,7 @@ An interactive web application built in Go that transforms user-inputted text in
 The project relies on a clean, scalable architectural split to enforce standard web software paradigms:
 
 ```text
-ascii-art-web/
+ascii-art-web-export-file/
 ├── banners/               # Target layout text fonts (.txt assets)
 ├── internal/              # Core proprietary runtime execution packages
 │   ├── banner/            # Safe text file system input parsing
