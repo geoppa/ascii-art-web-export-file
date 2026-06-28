@@ -3,12 +3,25 @@ package handlers
 import (
 	"html/template"
 	"net/http"
-	"strconv" // NEW: ADDED FOR THE CONTENT-LENGTH HEADER CONVERSION
+	"strconv"
 
 	"ascii-art-web-export-file/internal/banner"
 	"ascii-art-web-export-file/internal/render"
 	"ascii-art-web-export-file/internal/validation"
 )
+
+// Pre-parse templates to avoid repetitive and costly disk I/O operations per request
+var (
+	homeTemplate  *template.Template
+	errorTemplate *template.Template
+)
+
+func init() {
+	// template.Must will panic if the files are missing at startup,
+	// enforcing a fail-fast strategy for deployment issues.
+	homeTemplate = template.Must(template.ParseFiles("templates/index.html"))
+	errorTemplate = template.Must(template.ParseFiles("templates/error.html"))
+}
 
 // PageData holds form and result information for the main UI
 type PageData struct {
@@ -26,14 +39,7 @@ type ErrorPageData struct {
 
 // renderHomePage displays the primary user submission layout
 func renderHomePage(w http.ResponseWriter, data PageData) {
-	tmpl, err := template.ParseFiles("templates/index.html")
-	if err != nil {
-		// If the main template is missing, it is a server error (500), not a 404
-		renderErrorPage(w, http.StatusInternalServerError, "Internal Server Error")
-		return
-	}
-
-	err = tmpl.Execute(w, data)
+	err := homeTemplate.Execute(w, data)
 	if err != nil {
 		renderErrorPage(w, http.StatusInternalServerError, "Internal Server Error")
 		return
@@ -42,21 +48,15 @@ func renderHomePage(w http.ResponseWriter, data PageData) {
 
 // renderErrorPage outputs dedicated custom error HTML screens
 func renderErrorPage(w http.ResponseWriter, statusCode int, message string) {
-	tmpl, err := template.ParseFiles("templates/error.html")
-	if err != nil {
-		// Fallback to plain text if the error template file is missing
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	// Explicitly set the response status code header before rendering
+	// Set the response status code header before writing any body content
 	w.WriteHeader(statusCode)
 
-	err = tmpl.Execute(w, ErrorPageData{
+	err := errorTemplate.Execute(w, ErrorPageData{
 		Code:    statusCode,
 		Message: message,
 	})
 	if err != nil {
+		// Fallback to plain text if the template rendering fails entirely
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -86,58 +86,9 @@ func AsciiArtHandler(w http.ResponseWriter, r *http.Request) {
 		renderErrorPage(w, http.StatusMethodNotAllowed, "Method Not Allowed")
 		return
 	}
-// AsciiArtHandler validates form inputs, reads files, and processes the output art
-func AsciiArtHandler(w http.ResponseWriter, r *http.Request) {
-	// Block requests trying to execute anything other than a secure POST
-	if r.Method != http.MethodPost {
-		renderErrorPage(w, http.StatusMethodNotAllowed, "Method Not Allowed")
-		return
-	}
 
-	// NEW: LIMIT THE REQUEST BODY SIZE TO 10 MEGABYTES TO PREVENT FLOODING / CRASHES
-	// NEW: IF THE INPUT EXCEEDS THIS, PARSEFORM WILL RETURN AN ERROR
-	const maxRequestSize = 10 * 1024 * 1024 // 10MB
-	r.Body = http.MaxBytesReader(w, r.Body, maxRequestSize)
-
-	// Read form inputs safely
-	err := r.ParseForm()
-	if err != nil {
-		// NEW: SPECIFICALLY DETECT IF THE ERROR WAS CAUSED BY EXCEEDING THE MAX SIZE LIMIT
-		if strings.Contains(err.Error(), "request body too large") {
-			renderErrorPage(w, http.StatusRequestEntityTooLarge, "Request Entity Too Large")
-			return
-		}
-		renderErrorPage(w, http.StatusBadRequest, "Bad Request")
-		return
-	}
-
-	text := r.FormValue("text")
-	bannerName := r.FormValue("banner")
-	action := r.FormValue("action") // NEW: CAPTURES WHICH SUBMIT BUTTON WAS PRESSED (GENERATE OR EXPORT)
-
-	// NEW: EXPLICIT CHARACTER COUNT CHECK (E.G., MAX 1000 CHARACTERS FOR INTENSE ASCII COMPUTATION)
-	if len(text) > 1000 {
-		w.WriteHeader(http.StatusBadRequest)
-		renderHomePage(w, PageData{
-			Text:   text,
-			Banner: bannerName,
-			Error:  "Input text is too long! Maximum allowed is 1000 characters.",
-		})
-		return
-	}
-
-	// Verify inputted text conforms to printable character rules
-	err = validation.ValidateText(text)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest) // tells the browser this is a 400 error
-		renderHomePage(w, PageData{
-			Text:   text,
-			Banner: bannerName,
-			Error:  err.Error(),
-		})
-		return
-	}
-
+	// Limit the request body size (e.g., 10MB) to protect against DoS attacks
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
 
 	// Read form inputs safely
 	err := r.ParseForm()
@@ -148,12 +99,12 @@ func AsciiArtHandler(w http.ResponseWriter, r *http.Request) {
 
 	text := r.FormValue("text")
 	bannerName := r.FormValue("banner")
-	action := r.FormValue("action") // NEW: CAPTURES WHICH SUBMIT BUTTON WAS PRESSED (GENERATE OR EXPORT)
+	action := r.FormValue("action") // Captures which submit button was pressed (generate or export)
 
 	// Verify inputted text conforms to printable character rules
 	err = validation.ValidateText(text)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest) // tells the browser this is a 400 error
+		w.WriteHeader(http.StatusBadRequest) // Tells the browser this is a 400 error
 		renderHomePage(w, PageData{
 			Text:   text,
 			Banner: bannerName,
@@ -165,7 +116,7 @@ func AsciiArtHandler(w http.ResponseWriter, r *http.Request) {
 	// Verify the chosen template target name matches existing files
 	err = validation.ValidateBanner(bannerName)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest) // force a 400 Bad Request network header
+		w.WriteHeader(http.StatusBadRequest) // Force a 400 Bad Request network header
 		renderHomePage(w, PageData{
 			Text:   text,
 			Banner: bannerName,
@@ -179,29 +130,25 @@ func AsciiArtHandler(w http.ResponseWriter, r *http.Request) {
 	// Read text representation matrix out of storage
 	bannerData, err := banner.Load(bannerFile)
 	if err != nil {
-		renderErrorPage(
-			w,
-			http.StatusInternalServerError,
-			"Internal Server Error",
-		)
+		renderErrorPage(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
 	// Generate standard visual ASCII character block map
 	result := render.Generate(text, bannerData)
 
-	// NEW: CHECK IF THE USER REQUESTED TO DOWNLOAD THE FILE
+	// Check if the user requested to download the file
 	if action == "export" {
-		// NEW: CONVERT STRING TO BYTE SLICE TO MEASURE ACCURATE SIZE IN BYTES
+		// Convert string to byte slice to measure accurate size in bytes
 		dataBytes := []byte(result)
 		contentLength := len(dataBytes)
 
-		// NEW: SET MANDATORY HTTP HEADERS TO FORCE FILE DOWNLOAD IN BROWSER
+		// Set mandatory HTTP headers to force file download in browser
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Header().Set("Content-Disposition", "attachment; filename=\"ascii-art.txt\"")
 		w.Header().Set("Content-Length", strconv.Itoa(contentLength))
 
-		// NEW: WRITE RAW BYTES DIRECTLY TO RESPONSE STREAM AND TERMINATE HANDLER
+		// Write raw bytes directly to response stream and terminate handler
 		w.Write(dataBytes)
 		return
 	}
