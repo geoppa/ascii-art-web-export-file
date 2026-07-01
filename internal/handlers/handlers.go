@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"html/template"
 	"net/http"
 	"strconv"
@@ -145,7 +146,8 @@ func AsciiArtHandler(w http.ResponseWriter, r *http.Request) {
 
 		// Set mandatory HTTP headers to force file download in browser
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.Header().Set("Content-Disposition", "attachment; filename=\"ascii-art.txt\"")
+		fileName := fmt.Sprintf("ascii-art-%s.txt", bannerName)
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fileName))
 		w.Header().Set("Content-Length", strconv.Itoa(contentLength))
 
 		// Write raw bytes directly to response stream and terminate handler
