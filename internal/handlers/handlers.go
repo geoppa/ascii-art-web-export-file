@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -140,17 +141,70 @@ func AsciiArtHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Check if the user requested to download the file
 	if action == "export" {
-		// Convert string to byte slice to measure accurate size in bytes
-		dataBytes := []byte(result)
-		contentLength := len(dataBytes)
+		format := r.FormValue("format")
+		if format == "" {
+			format = "txt"
+		}
 
-		// Set mandatory HTTP headers to force file download in browser
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fileName := fmt.Sprintf("ascii-art-%s.txt", bannerName)
+		var dataBytes []byte
+		var fileName string
+		var err error
+
+		switch format {
+		case "html":
+			htmlContent := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ASCII Art - %s</title>
+    <style>
+        body {
+            background-color: #02040f;
+            color: #22d3ee;
+            font-family: "Courier New", Courier, monospace;
+            padding: 30px;
+            white-space: pre;
+            font-size: 14px;
+            line-height: 1.2;
+        }
+    </style>
+</head>
+<body>%s</body>
+</html>`, bannerName, result)
+
+			dataBytes = []byte(htmlContent)
+			fileName = fmt.Sprintf("ascii-art-%s.html", bannerName)
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+		case "json":
+			// Create a structured map to hold the data cleanly
+			jsonData := map[string]string{
+				"banner": bannerName,
+				"input":  text,
+				"ascii":  result,
+			}
+
+			// MarshalIndent makes the downloaded JSON file look pretty and readable
+			dataBytes, err = json.MarshalIndent(jsonData, "", "  ")
+			if err != nil {
+				renderErrorPage(w, http.StatusInternalServerError, "Internal Server Error")
+				return
+			}
+
+			fileName = fmt.Sprintf("ascii-art-%s.json", bannerName)
+			w.Header().Set("Content-Type", "application/json")
+
+		case "txt":
+			fallthrough
+		default:
+			dataBytes = []byte(result)
+			fileName = fmt.Sprintf("ascii-art-%s.txt", bannerName)
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		}
+
+		// Send correct download behavior instructions back to browser client
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fileName))
-		w.Header().Set("Content-Length", strconv.Itoa(contentLength))
-
-		// Write raw bytes directly to response stream and terminate handler
+		w.Header().Set("Content-Length", strconv.Itoa(len(dataBytes)))
 		w.Write(dataBytes)
 		return
 	}

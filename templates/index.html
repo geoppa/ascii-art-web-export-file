@@ -101,29 +101,33 @@
 
             </div>
 
-            <div class="button-row">
-
+   <div class="button-row">
     <button class="generate-btn" type="submit" name="action" value="generate">
         <span class="btn-icon">⚡</span>
         <span>Generate ASCII Art</span>
     </button>
 
-    <!-- THE CONDITION CHECKS IF ART EXISTS, THEN RENDERS THE NEW STYLED EXPORT -->
+    <!-- Dropdown and Download button group rendered only if result is valid -->
     {{ if .Result }}
-    <button class="generate-btn export-btn" type="submit" name="action" value="export">
-        <span class="btn-icon">💾</span>
-        <span>Export File</span>
-    </button>
+    <div class="export-group" style="display: flex; gap: 10px; width: 100%;">
+        <select name="format" style="flex: 1; padding: 12px; background: #070b1f; color: white; border: 2px solid #22d3ee; border-radius: 14px; font-weight: bold; cursor: pointer;">
+            <option value="txt">Text (.txt)</option>
+            <option value="html">HTML (.html)</option>
+            <option value="json">JSON (.json)</option>
+        </select>
+
+        <button class="generate-btn" type="submit" name="action" value="export" style="flex: 1; margin: 0; padding: 12px;">
+            <span class="btn-icon">💾</span>
+            <span>Export</span>
+        </button>
+    </div>
     {{ end }}
 
     <a href="/" class="reset-btn">
         <span class="btn-icon">🔄</span>
         <span>Reset Page</span>
     </a>
-
 </div>
-
-
 
             {{ if .Error }}
             <div class="error-box">
